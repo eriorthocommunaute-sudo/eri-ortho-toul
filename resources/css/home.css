@@ -1,0 +1,22 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/forms";
+@source "../views/home.blade.php";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary: #762B32;
+  --color-primary-container: #59151d;
+  --color-on-primary: #ffffff;
+  --color-secondary: #B99A62;
+  --color-secondary-container: #fedb9d;
+  --color-on-secondary: #271900;
+  --color-surface: #F8F5EF;
+  --color-surface-low: #F2EDE4;
+  --color-stone-light: #EAE4DC;
+  --color-charcoal: #252525;
+  --color-charcoal-muted: #55524E;
+  --color-gold-accent: #B99A62;
+  --font-garamond: "EB Garamond", serif;
+  --font-ethiopic: "Noto Sans", sans-serif;
+  --font-inter: "Inter", sans-serif;
+}
