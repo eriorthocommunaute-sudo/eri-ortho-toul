@@ -11,9 +11,19 @@ return new class extends Migration
         Schema::create('payment_allocations', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('payment_id');
-            $table->foreignId('payment')->constrained()->onDelete('cascade');
+            // SQLite cannot drop FK-constrained columns in the later fix
+            // migration, so the constraints themselves are MySQL-only.
+            if (Schema::getConnection()->getDriverName() === 'sqlite') {
+                $table->unsignedBigInteger('payment');
+            } else {
+                $table->foreignId('payment')->constrained()->onDelete('cascade');
+            }
             $table->unsignedBigInteger('member_contribution_id');
-            $table->foreignId('member_contribution')->constrained('member_contributions')->onDelete('cascade');
+            if (Schema::getConnection()->getDriverName() === 'sqlite') {
+                $table->unsignedBigInteger('member_contribution');
+            } else {
+                $table->foreignId('member_contribution')->constrained('member_contributions')->onDelete('cascade');
+            }
             $table->decimal('allocated_amount', 8, 2)->default(0.00);
             $table->timestamps();
 

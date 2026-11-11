@@ -11,7 +11,13 @@ return new class extends Migration
         Schema::create('member_contributions', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('member_id');
-            $table->foreignId('member')->constrained()->onDelete('cascade');
+            // SQLite cannot drop an FK-constrained column in the later fix
+            // migration, so the constraint itself is MySQL-only.
+            if (Schema::getConnection()->getDriverName() === 'sqlite') {
+                $table->unsignedBigInteger('member');
+            } else {
+                $table->foreignId('member')->constrained()->onDelete('cascade');
+            }
             $table->integer('period_year');
             $table->integer('period_month');
             $table->decimal('expected_amount', 8, 2)->default(10.00);

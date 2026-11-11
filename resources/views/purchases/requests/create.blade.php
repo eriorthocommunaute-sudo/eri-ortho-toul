@@ -10,7 +10,7 @@
         <legend>DEMANDE D’ACHAT ET DE DÉPENSE / ሕቶ ግዝኣትን ወጻኢታትን</legend>
         <div class="grid">
             <label>Référence DA
-                <input type="text" value="DA-{{ now()->year }}- (générée à l’enregistrement)" readonly>
+                <input type="text" value="DA-{{ now()->format('Y-m') }}- (générée à l’enregistrement)" readonly>
             </label>
             <label>Date / ዕለት
                 <input type="text" name="request_date" value="{{ old('request_date', now()->format('d/m/Y')) }}">

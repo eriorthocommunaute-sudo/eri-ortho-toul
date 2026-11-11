@@ -95,6 +95,7 @@
         }
 
         /* ---- Lignes de saisie ---- */
+        /* ---- Lignes de saisie ---- */
         td.cell {
             height: 20px;
             line-height: 18px;
@@ -103,6 +104,14 @@
             vertical-align: top;
             overflow: hidden;
             white-space: nowrap;
+        }
+        td.cell.notes-cell {
+            height: auto;
+            min-height: 20px;
+            white-space: normal;
+            overflow-wrap: break-word;
+            overflow: visible;
+            text-align: left;
         }
         .opening-balance {
             display: grid;
@@ -269,7 +278,7 @@
             <td class="cell">{{ $entry['type'] === 'income' ? number_format($entry['amount'], 2, ',', ' ') : '' }}</td>
             <td class="cell">{{ $entry['type'] === 'expense' ? number_format($entry['amount'], 2, ',', ' ') : '' }}</td>
             <td class="cell">{{ number_format($entry['running_balance'], 2, ',', ' ') }}</td>
-            <td class="cell">{{ trim($entry['payment_method'] . ($entry['notes'] ? ' | ' . $entry['notes'] : '')) }}</td>
+            <td class="cell notes-cell">{{ trim($entry['payment_method'] . ($entry['notes'] ? ' | ' . $entry['notes'] : '')) }}</td>
         </tr>
         @endforeach
         @for ($i = $entries->count() + 1; $i <= $rowsCount; $i++)

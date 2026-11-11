@@ -10,6 +10,7 @@ use App\Models\PurchaseRequest;
 use App\Services\ReferenceNumberService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -58,19 +59,20 @@ class PurchaseRequestController extends Controller
         $prefix = sprintf('DA-%04d-%02d-', $year, $month);
 
         // Continue after the highest reference already registered for this month.
-        // This produces DA-2026-11-05 when DA-2026-11-04 is the latest reference.
+        // This produces DA-2026-11-005 when DA-2026-11-004 is the latest reference.
         $lastNumber = PurchaseRequest::query()
-            ->where('reference', 'like', $prefix . '%')
+            ->where('reference', 'like', $prefix.'%')
             ->pluck('reference')
             ->map(function ($reference) use ($prefix) {
                 $suffix = substr((string) $reference, strlen($prefix));
+
                 return ctype_digit($suffix) ? (int) $suffix : 0;
             })
             ->max() ?? 0;
 
         $references = [];
         for ($number = $lastNumber + 1; count($references) < $count; $number++) {
-            $references[] = $prefix . str_pad((string) $number, 2, '0', STR_PAD_LEFT);
+            $references[] = $prefix.str_pad((string) $number, 3, '0', STR_PAD_LEFT);
         }
 
         return view('purchases.requests.form-print', ['references' => $references]);
@@ -84,7 +86,8 @@ class PurchaseRequestController extends Controller
     public function store(PurchaseRequestRequest $request, ReferenceNumberService $references): RedirectResponse
     {
         $data = $request->validated();
-        $data['reference'] = $references->next('DA');
+        $placedOn = $this->placedOn($data['request_date'] ?? null);
+        $data['reference'] = $references->next('DA', (int) $placedOn->format('Y'), (int) $placedOn->format('m'));
         $data['requested_by'] = $request->user()->id;
         $data['created_by'] = $request->user()->id;
         $data['updated_by'] = $request->user()->id;
@@ -96,15 +99,35 @@ class PurchaseRequestController extends Controller
         return redirect()->route('purchase-requests.show', $purchaseRequest)->with('success', __('app.purchase_request_created'));
     }
 
+    /**
+     * The month in which the order was placed drives the DA reference
+     * (DA-YYYY-MM-NNN). Falls back to the current date when the field is
+     * empty or unparseable.
+     */
+    protected function placedOn(?string $requestDate): Carbon
+    {
+        if ($requestDate !== null && $requestDate !== '') {
+            try {
+                return Carbon::createFromFormat('d/m/Y', $requestDate);
+            } catch (\Throwable) {
+                // Fall through to the current date.
+            }
+        }
+
+        return Carbon::now();
+    }
+
     public function show(PurchaseRequest $purchaseRequest): View
     {
         $purchaseRequest->load('requester', 'approver');
+
         return view('purchases.requests.show', compact('purchaseRequest'));
     }
 
     public function edit(PurchaseRequest $purchaseRequest): View
     {
         abort_unless(in_array($purchaseRequest->status, ['draft']), 403, __('app.request_not_editable'));
+
         return view('purchases.requests.edit', compact('purchaseRequest'));
     }
 
@@ -228,7 +251,7 @@ class PurchaseRequestController extends Controller
                 },
                 'source_type' => PurchaseRequest::class,
                 'source_id' => $locked->id,
-                'description' => 'Dépense : ' . $locked->title,
+                'description' => 'Dépense : '.$locked->title,
                 'amount' => $data['paid_amount'],
                 'payment_method' => $data['payment_method'],
                 'created_by' => $request->user()->id,

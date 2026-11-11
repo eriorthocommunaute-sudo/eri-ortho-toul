@@ -21,6 +21,19 @@ param(
     [string]$RefPrefix = ''
 )
 
+# Excel's ExportAsFixedFormat rejects forward-slash paths (Laravel's
+# storage_path() emits them on Windows); normalize for all file operations.
+$TemplatePath = $TemplatePath.Replace('/', '\')
+$OutputPath = $OutputPath.Replace('/', '\')
+$ValuesPath = $ValuesPath.Replace('/', '\')
+
+# PowerShell's COM adapter caches Value2's setter type after the first
+# variable-sourced assignment, breaking later numeric writes. InvokeMember
+# performs a plain IDispatch put and accepts any value type.
+function Set-CellValue([object]$Target, [object]$Value) {
+    $Target.GetType().InvokeMember('Value2', 'SetProperty', $null, $Target, @($Value)) | Out-Null
+}
+
 $ErrorActionPreference = 'Stop'
 $excel = $null
 $book  = $null
@@ -56,9 +69,9 @@ try {
     #   Row 3 : document title
     #   Row 4 : document identification line (carries the RF reference)
     #   Row 5 : description line (carries the period)
-    $sheet.Range('B3').Value2 = $title
-    $sheet.Range('B4').Value2 = $docLine
-    $sheet.Range('B5').Value2 = $subtitle
+    Set-CellValue $sheet.Range('B3') $title
+    Set-CellValue $sheet.Range('B4') $docLine
+    Set-CellValue $sheet.Range('B5') $subtitle
 
     # --- Populate the register rows ----------------------------------------
     $entries = @($values.Entries)
@@ -75,7 +88,7 @@ try {
     $openingBalanceRow = $DataStartRow - 2
     $sheet.Range("F$openingBalanceRow`:H$openingBalanceRow").UnMerge()
     $sheet.Range("F$openingBalanceRow`:H$openingBalanceRow").Merge()
-    $sheet.Range("F$openingBalanceRow").Value2 = 'Solde d''ouverture / መእተዊ ተረፍ'
+    Set-CellValue $sheet.Range("F$openingBalanceRow") 'Solde d''ouverture / መእተዊ ተረፍ'
     $sheet.Range("F$openingBalanceRow").HorizontalAlignment = -4152
     $sheet.Range("F$openingBalanceRow:I$openingBalanceRow").Font.Bold = $true
     $sheet.Range("I$openingBalanceRow").NumberFormat = $sheet.Range("I$DataStartRow").NumberFormat
@@ -87,7 +100,7 @@ try {
     if ($blankData) {
         $sheet.Range("I$openingBalanceRow").ClearContents()
     } else {
-        $sheet.Range("I$openingBalanceRow").Value2 = $openingBalance
+        Set-CellValue $sheet.Range("I$openingBalanceRow") $openingBalance
     }
 
     $runningBalance = $openingBalance
@@ -101,38 +114,38 @@ try {
         else { $expense = [double]$entry.amount }
         $runningBalance += ($income - $expense)
 
-        $sheet.Range("B$row").Value2 = $i + 1
-        $sheet.Range("C$row").Value2 = [string]$entry.line_reference
-        $sheet.Range("D$row").Value2 = [string]$entry.entry_date
-        $sheet.Range("E$row").Value2 = [string]$entry.source_reference
-        $sheet.Range("F$row").Value2 = [string]$entry.category_label
-        if ($income -gt 0) { $sheet.Range("G$row").Value2 = $income }
-        if ($expense -gt 0) { $sheet.Range("H$row").Value2 = $expense }
-        $sheet.Range("I$row").Value2 = $runningBalance
+        Set-CellValue $sheet.Range("B$row") ($i + 1)
+        Set-CellValue $sheet.Range("C$row") ([string]$entry.line_reference)
+        Set-CellValue $sheet.Range("D$row") ([string]$entry.entry_date)
+        Set-CellValue $sheet.Range("E$row") ([string]$entry.source_reference)
+        Set-CellValue $sheet.Range("F$row") ([string]$entry.category_label)
+        if ($income -gt 0) { Set-CellValue $sheet.Range("G$row") $income }
+        if ($expense -gt 0) { Set-CellValue $sheet.Range("H$row") $expense }
+        Set-CellValue $sheet.Range("I$row") $runningBalance
         $notes = [string]$entry.payment_method
         if ([string]$entry.notes -ne '') { $notes += ' | ' + [string]$entry.notes }
-        $sheet.Range("J$row").Value2 = $notes
+        Set-CellValue $sheet.Range("J$row") $notes
     }
 
     if ($blankData) {
         $sheet.Range('G227:I227').ClearContents()
     } else {
-        $sheet.Range('G227').Value2 = $totalIncome
-        $sheet.Range('H227').Value2 = $totalExpense
-        $sheet.Range('I227').Value2 = $closingBalance
+        Set-CellValue $sheet.Range('G227') $totalIncome
+        Set-CellValue $sheet.Range('H227') $totalExpense
+        Set-CellValue $sheet.Range('I227') $closingBalance
     }
 
     # Category totals in the source-reference guide (income: G, expenses: H).
     $sourceRows = @{ 'COT' = 218; 'OFF' = 219; 'DON' = 220; 'EQP' = 221; 'TRP' = 222; 'PRE' = 223; 'EVT' = 224; 'EXC' = 225 }
     foreach ($code in $sourceRows.Keys) {
-        $sheet.Range("C$($sourceRows[$code])").Value2 = $code + '-' + $registerYear + '-'
+        Set-CellValue $sheet.Range("C$($sourceRows[$code])") ($code + '-' + $registerYear + '-')
         $sourceRow = $sourceRows[$code]
         $totals = $sourceTotals.$code
         if ($blankData) {
             $sheet.Range("G$sourceRow:H$sourceRow").ClearContents()
         } elseif ($null -ne $totals) {
-            if ([double]$totals.income -gt 0) { $sheet.Range("G$sourceRow").Value2 = [double]$totals.income }
-            if ([double]$totals.expense -gt 0) { $sheet.Range("H$sourceRow").Value2 = [double]$totals.expense }
+            if ([double]$totals.income -gt 0) { Set-CellValue $sheet.Range("G$sourceRow") ([double]$totals.income) }
+            if ([double]$totals.expense -gt 0) { Set-CellValue $sheet.Range("H$sourceRow") ([double]$totals.expense) }
         }
     }
 
@@ -144,9 +157,9 @@ try {
         $rfCount = if ($VisibleRows -gt 0) { $VisibleRows } else { $DataRowCount }
         for ($i = 1; $i -le $rfCount; $i++) {
             $row = $DataStartRow + $i - 1
-            $sheet.Range("B$row").Value2 = $i
+            Set-CellValue $sheet.Range("B$row") $i
             if ($i -gt $rowCount) {
-                $sheet.Range("C$row").Value2 = $refPrefix + '-' + $i.ToString('00')
+                Set-CellValue $sheet.Range("C$row") ($refPrefix + '-' + $i.ToString('00'))
             }
         }
     }

@@ -13,7 +13,13 @@ return new class extends Migration
             $table->string('payment_reference')->unique(); // PAY-YYYY-NNNNNN
             $table->string('receipt_reference')->unique(); // REC-YYYY-NNNNNN
             $table->unsignedBigInteger('member_id');
-            $table->foreignId('member')->constrained()->onDelete('cascade');
+            // SQLite cannot drop an FK-constrained column in the later fix
+            // migration, so the constraint itself is MySQL-only.
+            if (Schema::getConnection()->getDriverName() === 'sqlite') {
+                $table->unsignedBigInteger('member');
+            } else {
+                $table->foreignId('member')->constrained()->onDelete('cascade');
+            }
             $table->date('payment_date');
             $table->decimal('amount', 10, 2);
             $table->enum('payment_method', ['cash', 'bank_transfer'])->default('cash');

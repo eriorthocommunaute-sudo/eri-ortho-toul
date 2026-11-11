@@ -13,7 +13,7 @@ class ReferenceNumberService
     protected array $formats = [
         'MEM' => '{PREFIX}-{YEAR}-{NUMBER:03d}',
         'PAY' => '{PREFIX}-{YEAR}-{NUMBER:06d}',
-        'RF'  => '{PREFIX}-{YEAR}-{NUMBER:04d}',
+        'RF' => '{PREFIX}-{YEAR}-{NUMBER:04d}',
         'COT' => '{PREFIX}-{YEAR}-{MONTH:02d}',
         'REC' => '{PREFIX}-{YEAR}-{NUMBER:04d}',
         'AVI' => '{PREFIX}-{YEAR}-{NUMBER:04d}',
@@ -23,9 +23,9 @@ class ReferenceNumberService
         'TRP' => '{PREFIX}-{YEAR}-{NUMBER:04d}',
         'PRE' => '{PREFIX}-{YEAR}-{NUMBER:04d}',
         'EVT' => '{PREFIX}-{YEAR}-{NUMBER:04d}',
-        'DA'  => '{PREFIX}-{YEAR}-{NUMBER:04d}',
+        'DA' => '{PREFIX}-{YEAR}-{MONTH:02d}-{NUMBER:03d}',
         'EXC' => '{PREFIX}-{YEAR}-{NUMBER:04d}',
-        'PV'  => '{PREFIX}-{YEAR}-{NUMBER:04d}',
+        'PV' => '{PREFIX}-{YEAR}-{NUMBER:04d}',
     ];
 
     /**
@@ -42,13 +42,13 @@ class ReferenceNumberService
         'OFF' => [['offrandes', 'reference']],
         'DON' => [['donations', 'reference']],
         'EVT' => [['events', 'reference']],
-        'DA'  => [['purchase_requests', 'reference']],
+        'DA' => [['purchase_requests', 'reference']],
         'EQP' => [['equipment', 'reference']],
         'EXC' => [['exceptional_demands', 'reference']],
-        'PV'  => [['meeting_minutes', 'reference']],
+        'PV' => [['meeting_minutes', 'reference']],
         'TRP' => [['priest_transports', 'reference']],
         'PRE' => [['priest_indemnities', 'reference']],
-        'RF'  => [
+        'RF' => [
             ['financial_entries', 'reference'],
             ['receipts', 'financial_reference'],
             ['offrandes', 'financial_reference'],
@@ -69,21 +69,38 @@ class ReferenceNumberService
             throw new \InvalidArgumentException('Invalid reference prefix.');
         }
         $year ??= (int) now()->format('Y');
+        $month ??= (int) now()->format('m');
 
+        // COT is a category source code (COT-2026-10), not a numbered reference.
+        if ($prefix === 'COT') {
+            return sprintf('%s-%d-%02d', $prefix, $year, $month);
+        }
+
+        return $this->nextMonthlyReference($prefix, $year, $month);
+    }
+
+    /**
+     * Monthly-scoped reference such as DA-2026-09-001: the number restarts at
+     * 001 on the first request of each month, tracked by its own sequence row.
+     */
+    protected function nextMonthlyReference(string $prefix, int $year, int $month): string
+    {
         for ($attempt = 0; $attempt < 3; $attempt++) {
             try {
                 return DB::transaction(function () use ($prefix, $year, $month) {
                     $sequence = ReferenceSequence::where('prefix', $prefix)
                         ->where('sequence_year', $year)
+                        ->where('sequence_month', $month)
                         ->lockForUpdate()
                         ->first();
 
-                    $existingMax = $this->existingMaxNumber($prefix, $year);
+                    $existingMax = $this->existingMonthlyMax($prefix, $year, $month);
 
                     if (! $sequence) {
                         $sequence = ReferenceSequence::create([
                             'prefix' => $prefix,
                             'sequence_year' => $year,
+                            'sequence_month' => $month,
                             'last_number' => $existingMax,
                         ]);
                         $sequence = ReferenceSequence::whereKey($sequence->id)->lockForUpdate()->firstOrFail();
@@ -94,13 +111,13 @@ class ReferenceNumberService
                     $sequence->increment('last_number');
                     $number = $sequence->fresh()->last_number;
 
-                    if ($prefix === 'COT' && $month) {
-                        return sprintf('%s-%d-%02d', $prefix, $year, $month);
-                    }
-
-                    $digits = $this->digitsFor($prefix);
-
-                    return sprintf('%s-%d-%s', $prefix, $year, str_pad((string) $number, $digits, '0', STR_PAD_LEFT));
+                    return sprintf(
+                        '%s-%04d-%02d-%s',
+                        $prefix,
+                        $year,
+                        $month,
+                        str_pad((string) $number, $this->digitsFor($prefix), '0', STR_PAD_LEFT)
+                    );
                 }, 3);
             } catch (QueryException $exception) {
                 if ($attempt === 2) {
@@ -111,11 +128,12 @@ class ReferenceNumberService
     }
 
     /**
-     * Highest number already issued for the prefix/year across its source tables.
+     * Highest number already issued for the prefix in the given month (e.g. DA-2026-09-%).
      */
-    protected function existingMaxNumber(string $prefix, int $year): int
+    protected function existingMonthlyMax(string $prefix, int $year, int $month): int
     {
         $max = 0;
+        $like = sprintf('%s-%04d-%02d-%%', $prefix, $year, $month);
 
         foreach ($this->sources[$prefix] ?? [] as [$table, $column]) {
             if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
@@ -123,7 +141,7 @@ class ReferenceNumberService
             }
 
             $codes = DB::table($table)
-                ->where($column, 'like', sprintf('%s-%d-%%', $prefix, $year))
+                ->where($column, 'like', $like)
                 ->pluck($column);
 
             foreach ($codes as $code) {
@@ -162,6 +180,7 @@ class ReferenceNumberService
     {
         $year ??= (int) now()->format('Y');
         $sequence = ReferenceSequence::where('prefix', $prefix)->where('sequence_year', $year)->first();
+
         return ($sequence?->last_number ?? 0) + 1;
     }
 }

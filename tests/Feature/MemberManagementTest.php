@@ -19,7 +19,7 @@ class MemberManagementTest extends TestCase
         $user->roles()->attach($role);
         $this->assertTrue($user->hasPermission('members.create'));
         $this->actingAs($user)->post(route('members.store'), ['given_name' => 'Mebrat', 'family_name' => 'Tesfay', 'status' => 'active'])->assertRedirect();
-        $this->assertDatabaseHas('members', ['member_code' => 'MEM-'.now()->year.'-001', 'given_name' => 'Mebrat']);
+        $this->assertDatabaseHas('members', ['member_code' => 'MEM-'.now()->format('Y').'-'.now()->format('m').'-001', 'given_name' => 'Mebrat']);
         $this->assertDatabaseHas('audit_logs', ['action' => 'member.created']);
     }
 

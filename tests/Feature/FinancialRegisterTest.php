@@ -60,7 +60,7 @@ class FinancialRegisterTest extends TestCase
         $this->assertSame('2026-10-31', $register['period_end']->format('Y-m-d'));
         $this->assertSame('Octobre 2026', $register['period_label']);
         $this->assertStringContainsString('Registre financier, Octobre 2026', $register['title']);
-        $this->assertStringContainsString('መዝገብ ገንዘብ ፡ ጥቅምት 2026', $register['title']);
+        $this->assertStringContainsString('መዝገብ ገንዘብ : ጥቅምቲ 2026', $register['title']);
 
         // Five-line bilingual header.
         $this->assertSame('Communauté Orthodoxe Érythréenne de Toulouse', $register['assoc_fr']);
@@ -72,11 +72,12 @@ class FinancialRegisterTest extends TestCase
         $this->assertStringContainsString('01/10/2026', $register['subtitle']);
         $this->assertStringContainsString('31/10/2026', $register['subtitle']);
 
-        // Blank template: no rows, no calculated totals.
-        $this->assertCount(0, $register['entries']);
-        $this->assertNull($register['total_income']);
-        $this->assertNull($register['total_expense']);
-        $this->assertNull($register['closing_balance']);
+        // Blank template: the reserved monthly COT line only, zeroed totals.
+        $this->assertCount(1, $register['entries']);
+        $this->assertSame('COT-2026-10', $register['entries'][0]['source_reference']);
+        $this->assertSame(0.0, $register['total_income']);
+        $this->assertSame(0.0, $register['total_expense']);
+        $this->assertSame(0.0, $register['closing_balance']);
 
         // The monthly register keeps 20 blank entry lines.
         $this->assertSame(20, $register['visible_rows']);
@@ -98,8 +99,8 @@ class FinancialRegisterTest extends TestCase
         $this->assertStringContainsString('31/12/2026', $register['subtitle']);
 
         $this->assertCount(0, $register['entries']);
-        $this->assertNull($register['total_income']);
-        $this->assertNull($register['closing_balance']);
+        $this->assertSame(0.0, $register['total_income']);
+        $this->assertSame(0.0, $register['closing_balance']);
 
         // The quarterly register keeps 50 blank entry lines.
         $this->assertSame(50, $register['visible_rows']);
@@ -161,11 +162,13 @@ class FinancialRegisterTest extends TestCase
             ->post('/financial-register/generate-monthly', [
                 'year' => 2026,
                 'month' => 10,
+                'blank_register' => 1,
             ]);
 
         $response->assertStatus(200);
         $content = $response->getContent();
 
+        // The blank template carries no ledger rows and no calculated amounts.
         $this->assertStringNotContainsString('COT-2026-10', $content);
         $this->assertStringNotContainsString('20,00', $content);
         $this->assertStringNotContainsString('10,00', $content);

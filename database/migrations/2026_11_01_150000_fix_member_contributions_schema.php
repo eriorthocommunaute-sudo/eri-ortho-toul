@@ -9,9 +9,13 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('member_contributions', function (Blueprint $table) {
-            $table->dropForeign(['member']);
-        });
+        // SQLite cannot drop foreign keys by name; its inline constraint is
+        // removed together with the column below.
+        if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+            Schema::table('member_contributions', function (Blueprint $table) {
+                $table->dropForeign(['member']);
+            });
+        }
 
         Schema::table('member_contributions', function (Blueprint $table) {
             $table->dropColumn('member');

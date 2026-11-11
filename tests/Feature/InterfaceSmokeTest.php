@@ -33,7 +33,7 @@ class InterfaceSmokeTest extends TestCase
 
     public function test_guest_pages_render_with_the_new_design(): void
     {
-        $this->get(route('home'))->assertOk()->assertSee(__('app.landing_title'));
+        $this->get(route('home'))->assertOk()->assertSee(__('home.hero_title'));
         $this->get(route('login'))->assertOk()->assertSee(__('app.login_heading'));
     }
 }
